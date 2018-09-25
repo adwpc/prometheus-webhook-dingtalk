@@ -5,16 +5,17 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/adwpc/prometheus-webhook-dingtalk/models"
+	"github.com/adwpc/prometheus-webhook-dingtalk/notifier"
 	"github.com/go-chi/chi"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/timonwong/prometheus-webhook-dingtalk/models"
-	"github.com/timonwong/prometheus-webhook-dingtalk/notifier"
 )
 
 type DingTalkResource struct {
 	Logger     log.Logger
 	Profiles   map[string]string
+	ProfilesAt map[string]string
 	HttpClient *http.Client
 }
 
@@ -28,8 +29,15 @@ func (rs *DingTalkResource) Routes() chi.Router {
 func (rs *DingTalkResource) SendNotification(w http.ResponseWriter, r *http.Request) {
 	logger := rs.Logger
 	profile := chi.URLParam(r, "profile")
+
 	webhookURL, ok := rs.Profiles[profile]
 	if !ok || webhookURL == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	at, ok := rs.ProfilesAt[profile]
+	if !ok || at == "" {
 		http.NotFound(w, r)
 		return
 	}
@@ -48,7 +56,7 @@ func (rs *DingTalkResource) SendNotification(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	robotResp, err := notifier.SendDingTalkNotification(rs.HttpClient, webhookURL, notification)
+	robotResp, err := notifier.SendDingTalkNotification(rs.HttpClient, webhookURL, at, notification)
 	if err != nil {
 		level.Error(logger).Log("msg", "Failed to send notification", "err", err)
 		http.Error(w, "Bad Request", http.StatusBadRequest)

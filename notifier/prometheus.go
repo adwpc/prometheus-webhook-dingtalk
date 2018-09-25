@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/adwpc/prometheus-webhook-dingtalk/models"
+	"github.com/adwpc/prometheus-webhook-dingtalk/template"
 	"github.com/pkg/errors"
-	"github.com/timonwong/prometheus-webhook-dingtalk/models"
-	"github.com/timonwong/prometheus-webhook-dingtalk/template"
 )
 
 func BuildDingTalkNotification(promMessage *models.WebhookMessage) (*models.DingTalkNotification, error) {
@@ -38,8 +39,25 @@ func BuildDingTalkNotification(promMessage *models.WebhookMessage) (*models.Ding
 	return notification, nil
 }
 
-func SendDingTalkNotification(httpClient *http.Client, webhookURL string, notification *models.DingTalkNotification) (*models.DingTalkNotificationResponse, error) {
+func SendDingTalkNotification(httpClient *http.Client, webhookURL string, at string, notification *models.DingTalkNotification) (*models.DingTalkNotificationResponse, error) {
+	if at != "" {
+		//186xxxxxxx,186xxxxxx...
+		phones := strings.Split(at, ",")
+		if notification != nil {
+			if notification.At == nil {
+				notification.At = &models.DingTalkNotificationAt{}
+			}
+			for i := 0; i < len(phones); i++ {
+				notification.At.AtMobiles = append(notification.At.AtMobiles, phones[i])
+				if notification.Markdown != nil {
+					notification.Markdown.Text = notification.Markdown.Text + "@" + phones[i]
+				}
+			}
+			notification.At.IsAtAll = false
+		}
+	}
 	body, err := json.Marshal(&notification)
+
 	if err != nil {
 		return nil, errors.Wrap(err, "error encoding DingTalk request")
 	}

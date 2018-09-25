@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/adwpc/prometheus-webhook-dingtalk/chilog"
+	"github.com/adwpc/prometheus-webhook-dingtalk/template"
+	"github.com/adwpc/prometheus-webhook-dingtalk/webrouter"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-kit/kit/log"
@@ -13,17 +16,15 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
-	"github.com/timonwong/prometheus-webhook-dingtalk/chilog"
-	"github.com/timonwong/prometheus-webhook-dingtalk/template"
-	"github.com/timonwong/prometheus-webhook-dingtalk/webrouter"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	listenAddress    = kingpin.Flag("web.listen-address", "The address to listen on for web interface.").Default(":8060").String()
-	dingTalkProfiles = DingTalkProfiles(kingpin.Flag("ding.profile", "Custom DingTalk profile (can be given multiple times, <profile>=<dingtalk-url>).").Required())
-	requestTimeout   = kingpin.Flag("ding.timeout", "Timeout for invoking DingTalk webhook.").Default("5s").Duration()
-	templateFileName = kingpin.Flag("template.file", "Customized template file (see template/default.tmpl for example)").Default("").String()
+	listenAddress      = kingpin.Flag("web.listen-address", "The address to listen on for web interface.").Default(":8060").String()
+	dingTalkProfiles   = DingTalkProfiles(kingpin.Flag("ding.profile", "Custom DingTalk profile (can be given multiple times, <profile>=<dingtalk-url>).").Required())
+	requestTimeout     = kingpin.Flag("ding.timeout", "Timeout for invoking DingTalk webhook.").Default("5s").Duration()
+	templateFileName   = kingpin.Flag("template.file", "Customized template file (see template/default.tmpl for example)").Default("").String()
+	dingTalkAtProfiles = DingTalkProfiles(kingpin.Flag("ding.profileat", "Customized at somebody (can be given multiple times, <profileat>=<phone>)").Required())
 )
 
 func main() {
@@ -61,6 +62,10 @@ func main() {
 	profiles := map[string]string(*dingTalkProfiles)
 	level.Info(logger).Log("msg", fmt.Sprintf("Using following dingtalk profiles: %v", profiles))
 
+	// Print current at profile configuration
+	profilesAt := map[string]string(*dingTalkAtProfiles)
+	level.Info(logger).Log("msg", fmt.Sprintf("Using following dingtalk at profiles: %v", profilesAt))
+
 	r := chi.NewRouter()
 	r.Use(middleware.CloseNotify)
 	r.Use(middleware.RealIP)
@@ -68,8 +73,9 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	dingTalkResource := &webrouter.DingTalkResource{
-		Logger:   logger,
-		Profiles: profiles,
+		Logger:     logger,
+		Profiles:   profiles,
+		ProfilesAt: profilesAt,
 		HttpClient: &http.Client{
 			Timeout: *requestTimeout,
 			Transport: &http.Transport{
